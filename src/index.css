@@ -1,0 +1,34 @@
+/* Local: src/index.css */
+
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Roboto', sans-serif;
+  
+  /* Fundo Gradiente Moderno (Dark Tech) */
+  /* Você pode ajustar essas cores para combinar com seu App Mobile */
+  background: radial-gradient(circle at top left, #2d3436, #000000);
+  /* Alternativa Azulada (se preferir): */
+  /* background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); */
+  
+  background-attachment: fixed; /* O fundo fica fixo enquanto o conteúdo rola */
+  background-size: cover;
+  min-height: 100vh;
+  color: #ffffff; /* Texto padrão branco para contraste */
+}
+
+/* Scrollbar estilizada para combinar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
