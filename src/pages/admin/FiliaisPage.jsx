@@ -1,190 +1,102 @@
-// Local: src/pages/admin/FiliaisPage.jsx
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Box, Typography, Button, Paper, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, IconButton, Chip, CircularProgress, Tooltip, Stack 
-} from '@mui/material';
+import { Box, Button, IconButton, Tooltip, Chip, Avatar } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import BlockIcon from '@mui/icons-material/Block';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { adminApiClient } from '../../api/apiClient'; // <--- MUDANÇA 1: Usar adminApiClient
+import { adminApiClient } from '../../api/apiClient';
 import CreateFilialModal from '../../components/admin/CreateFilialModal';
 import EditFilialModal from '../../components/admin/EditFilialModal';
+import RichTable from '../../components/common/RichTable'; // <--- Importando o novo componente
 import dayjs from 'dayjs';
 
 const FiliaisPage = () => {
-  const [filiais, setFiliais] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [devices, setDevices] = useState([]);
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingFilial, setEditingFilial] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // MUDANÇA 2: Usar adminApiClient para buscar a visão global ("Deus")
       const [usersRes, devicesRes] = await Promise.all([
         adminApiClient.get('/users'),
         adminApiClient.get('/devices')
       ]);
 
-      setUsers(usersRes.data);
-      setDevices(devicesRes.data);
-      setFiliais(usersRes.data.filter(user => user.attributes?.role === 'filial'));
+      const users = usersRes.data;
+      const devices = devicesRes.data;
+      const rawFiliais = users.filter(user => user.attributes?.role === 'filial');
 
-    } catch (error) {
-      console.error('Erro ao buscar dados:', error);
-    } finally {
-      setLoading(false);
-    }
+      // Processa dados para a tabela
+      const processed = rawFiliais.map(filial => {
+        const filialClients = users.filter(u => u.attributes?.role === 'cliente' && String(u.attributes?.filialId) === String(filial.id));
+        const clientIds = filialClients.map(c => String(c.id));
+        const activeDevices = devices.filter(d => clientIds.includes(String(d.attributes?.ownerId)) && !d.disabled).length;
+        
+        return {
+          ...filial,
+          clientsCount: filialClients.length,
+          devicesCount: activeDevices,
+          contractStatus: filial.attributes?.contractEnd 
+            ? (dayjs(filial.attributes.contractEnd).isBefore(dayjs()) ? 'Vencido' : 'Vigente')
+            : 'Indefinido'
+        };
+      });
+
+      setData(processed);
+    } catch (error) { console.error(error); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Lógica de Contagem (Dispositivos Ativos)
-  const getStats = (filialId) => {
-    // 1. Clientes da filial
-    const filialClients = users.filter(u => 
-        u.attributes?.role === 'cliente' && 
-        String(u.attributes?.filialId) === String(filialId)
-    );
-    
-    // 2. IDs dos clientes
-    const clientIds = filialClients.map(c => String(c.id));
+  // Definição das colunas da Tabela Pro
+  const columns = [
+    { id: 'name', label: 'Filial', render: (row) => (
+      <Box sx={{display:'flex', alignItems:'center', gap: 2}}>
+        <Avatar sx={{bgcolor: 'primary.main', width: 32, height: 32}}>{row.name.charAt(0)}</Avatar>
+        <Box>
+          <Box sx={{fontWeight:'bold'}}>{row.name}</Box>
+          <Box sx={{fontSize:'0.75rem', opacity:0.7}}>{row.email}</Box>
+        </Box>
+      </Box>
+    )},
+    { id: 'clientsCount', label: 'Clientes', numeric: true, render: (row) => <Chip label={row.clientsCount} size="small" variant="outlined" /> },
+    { id: 'devicesCount', label: 'Veículos Ativos', numeric: true, render: (row) => <Chip label={row.devicesCount} color="primary" size="small" /> },
+    { id: 'contractStatus', label: 'Contrato', render: (row) => (
+      <Chip label={row.contractStatus} color={row.contractStatus === 'Vencido' ? 'error' : 'success'} size="small" variant="outlined" />
+    )},
+    { id: 'disabled', label: 'Status', render: (row) => (
+      <Chip label={row.disabled ? "Suspensa" : "Ativa"} color={row.disabled ? "default" : "success"} size="small" />
+    )},
+  ];
 
-    // 3. Dispositivos desses clientes
-    const filialDevices = devices.filter(d => {
-        const ownerId = d.attributes?.ownerId;
-        return ownerId && clientIds.includes(String(ownerId));
-    });
-    
-    // 4. Ativos
-    const activeDevices = filialDevices.filter(d => !d.disabled);
-
-    return {
-      clientsCount: filialClients.length,
-      devicesCount: activeDevices.length
-    };
-  };
-
-  const handleModalSuccess = () => {
-    setIsCreateModalOpen(false);
-    setEditingFilial(null);
-    fetchData();
-  };
-
-  const handleToggleSuspend = async (filial) => {
-    if(!window.confirm(`Deseja ${filial.disabled ? 'ativar' : 'suspender'} esta filial?`)) return;
-    try {
-      await adminApiClient.put(`/users/${filial.id}`, { ...filial, disabled: !filial.disabled });
-      fetchData();
-    } catch(err) { console.error(err); }
-  };
-
-  const handleDelete = async (id) => {
-    if(!window.confirm("Tem certeza?")) return;
-    try {
-        await adminApiClient.delete(`/users/${id}`);
-        fetchData();
-    } catch(err) { console.error(err); }
-  }
-
-  const checkContract = (end) => {
-    if (!end) return { label: 'Indefinido', color: 'default' };
-    const days = dayjs(end).diff(dayjs(), 'day');
-    if (days < 0) return { label: 'Vencido', color: 'error' };
-    if (days < 30) return { label: 'Vence em breve', color: 'warning' };
-    return { label: 'Vigente', color: 'success' };
-  };
-
-  const cellStyle = { color: '#e0e0e0', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '10px 16px' };
-  const headerStyle = { fontWeight: 'bold', color: '#00e5ff', background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.1)' };
+  // Renderização das Ações
+  const renderActions = (row) => (
+    <Box>
+      <Tooltip title="Editar"><IconButton size="small" color="primary" onClick={() => setEditingFilial(row)}><EditIcon fontSize="small"/></IconButton></Tooltip>
+      <Tooltip title="Suspender/Ativar"><IconButton size="small" color="warning"><BlockIcon fontSize="small"/></IconButton></Tooltip>
+      <Tooltip title="Excluir"><IconButton size="small" color="error"><DeleteIcon fontSize="small"/></IconButton></Tooltip>
+    </Box>
+  );
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#fff' }}>Gestão de Filiais</Typography>
-        <Button 
-          variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateModalOpen(true)}
-          sx={{ borderRadius: 1 }}
-        >
-          Nova Filial
-        </Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Box />
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateModalOpen(true)}>Nova Filial</Button>
       </Box>
 
-      <TableContainer component={Paper} sx={{ background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 1 }}>
-        {loading ? <Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress /></Box> : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={headerStyle}>FILIAL</TableCell>
-                <TableCell sx={headerStyle}>CLIENTES</TableCell>
-                <TableCell sx={headerStyle}>DISPOSITIVOS ATIVOS</TableCell>
-                <TableCell sx={headerStyle}>CONTRATO</TableCell>
-                <TableCell sx={headerStyle}>STATUS</TableCell>
-                <TableCell sx={headerStyle} align="right">AÇÕES</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filiais.length === 0 ? (
-                <TableRow><TableCell colSpan={6} align="center" sx={cellStyle}>Nenhuma filial encontrada.</TableCell></TableRow>
-              ) : (
-                filiais.map((filial) => {
-                  const stats = getStats(filial.id);
-                  const contractEnd = filial.attributes?.contractEnd;
-                  const contractStatus = checkContract(contractEnd);
-                  const paymentStatus = filial.attributes?.paymentStatus || 'ativo';
+      <RichTable 
+        title="Gestão de Filiais"
+        data={data}
+        columns={columns}
+        actions={renderActions}
+        selectable={true}
+      />
 
-                  return (
-                    <TableRow key={filial.id} hover sx={{ '&:hover': { background: 'rgba(255,255,255,0.05)' } }}>
-                      <TableCell sx={cellStyle}>
-                        <Box>
-                            <Typography variant="body2" fontWeight="bold">{filial.name}</Typography>
-                            <Typography variant="caption" sx={{opacity:0.7}}>{filial.email}</Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={cellStyle}><Chip label={stats.clientsCount} size="small" sx={{bgcolor: 'rgba(124, 77, 255, 0.2)', color: '#7c4dff', fontWeight:'bold', borderRadius: 1}} /></TableCell>
-                      <TableCell sx={cellStyle}><Chip label={stats.devicesCount} size="small" sx={{bgcolor: 'rgba(0, 229, 255, 0.2)', color: '#00e5ff', fontWeight:'bold', borderRadius: 1}} /></TableCell>
-                      <TableCell sx={cellStyle}>
-                         <Box sx={{display:'flex', flexDirection:'column'}}>
-                            <Typography variant="body2" sx={{fontSize:'0.8rem'}}>
-                                {contractEnd ? dayjs(contractEnd).format('DD/MM/YYYY') : '-'}
-                            </Typography>
-                            {contractEnd && (
-                                <Typography variant="caption" sx={{color: contractStatus.color === 'error' ? '#ff1744' : '#66bb6a'}}>
-                                    {contractStatus.label}
-                                </Typography>
-                            )}
-                         </Box>
-                      </TableCell>
-                      <TableCell sx={cellStyle}>
-                        <Stack direction="row" spacing={1}>
-                            <Chip label={filial.disabled ? "Suspensa" : "Ativa"} color={filial.disabled ? "error" : "success"} variant="outlined" size="small" sx={{borderRadius: 1, height: 20, fontSize: 10}} />
-                            {paymentStatus === 'inadimplente' && !filial.disabled && <Chip label="Inadimplente" color="warning" size="small" sx={{borderRadius: 1, height: 20, fontSize: 10}} />}
-                        </Stack>
-                      </TableCell>
-                      <TableCell sx={cellStyle} align="right">
-                        <Tooltip title="Editar"><IconButton size="small" sx={{ color: '#fff' }} onClick={() => setEditingFilial(filial)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                        <Tooltip title={filial.disabled ? "Ativar" : "Suspender"}><IconButton size="small" sx={{ color: filial.disabled ? '#66bb6a' : '#ff9100' }} onClick={() => handleToggleSuspend(filial)}><BlockIcon fontSize="small" /></IconButton></Tooltip>
-                        <Tooltip title="Excluir"><IconButton size="small" sx={{ color: '#ff1744' }} onClick={() => handleDelete(filial.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        )}
-      </TableContainer>
-
-      <CreateFilialModal open={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={handleModalSuccess} />
-      {editingFilial && <EditFilialModal open={!!editingFilial} filial={editingFilial} onClose={() => setEditingFilial(null)} onSuccess={handleModalSuccess} />}
+      <CreateFilialModal open={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={() => { setIsCreateModalOpen(false); fetchData(); }} />
+      {editingFilial && <EditFilialModal open={!!editingFilial} filial={editingFilial} onClose={() => setEditingFilial(null)} onSuccess={() => { setEditingFilial(null); fetchData(); }} />}
     </Box>
   );
 };

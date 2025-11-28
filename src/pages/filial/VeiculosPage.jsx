@@ -1,122 +1,188 @@
-// Local: src/pages/filial/VeiculosPage.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
-  Box, Typography, Button, Paper, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, IconButton, CircularProgress, Tooltip, Chip, Avatar 
+  Box, Typography, Button, Grid, IconButton, InputBase, ToggleButton, ToggleButtonGroup, 
+  CircularProgress, Alert, Avatar, Tooltip, Chip
 } from '@mui/material';
+import { styled, alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
-import PersonIcon from '@mui/icons-material/Person';
-import apiClient from '../../api/apiClient';
+
+// Componentes e Hooks
+import { useVehicles, useUsers, useDeleteVehicle } from '../../hooks/useFleetData';
+import VehicleCard from '../../components/vehicles/VehicleCard';
+import RichTable from '../../components/common/RichTable';
 import CreateVeiculoModal from '../../components/filial/CreateVeiculoModal';
 import EditVehicleModal from '../../components/EditVehicleModal';
+import PermissionGate from '../../components/common/PermissionGate';
+import { PERMISSIONS } from '../../config/roles';
+
+// Estilos de Busca
+const Search = styled('div')(({ theme }) => ({
+  position: 'relative',
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: alpha(theme.palette.common.white, 0.05),
+  '&:hover': { backgroundColor: alpha(theme.palette.common.white, 0.10) },
+  width: '100%',
+  maxWidth: 400,
+  border: '1px solid rgba(255,255,255,0.1)',
+  marginRight: theme.spacing(2),
+}));
+
+const SearchIconWrapper = styled('div')(({ theme }) => ({
+  padding: theme.spacing(0, 2), height: '100%', position: 'absolute',
+  pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  color: theme.palette.text.secondary,
+}));
+
+const StyledInputBase = styled(InputBase)(({ theme }) => ({
+  color: 'inherit', width: '100%',
+  '& .MuiInputBase-input': { padding: theme.spacing(1, 1, 1, 0), paddingLeft: `calc(1em + ${theme.spacing(4)})` },
+}));
 
 const VeiculosPage = () => {
-  const [veiculos, setVeiculos] = useState([]);
-  const [usuarios, setUsuarios] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('grid');
+  const [search, setSearch] = useState('');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [devicesRes, usersRes] = await Promise.all([
-        apiClient.get('/devices'),
-        apiClient.get('/users')
-      ]);
-      setVeiculos(devicesRes.data);
-      const userMap = {};
-      usersRes.data.forEach(u => userMap[u.id] = u.name);
-      setUsuarios(userMap);
-    } catch (error) {
-      console.error("Erro:", error);
-    } finally {
-      setLoading(false);
+  // React Query Hooks
+  const { data: veiculos = [], isLoading, isError } = useVehicles();
+  const { data: users = [] } = useUsers();
+  const deleteMutation = useDeleteVehicle();
+
+  // Mapa de Proprietários
+  const userMap = useMemo(() => {
+    const map = {};
+    users.forEach(u => map[u.id] = u.name);
+    return map;
+  }, [users]);
+
+  // Filtragem
+  const filteredVehicles = useMemo(() => {
+    return veiculos.filter(v => 
+      v.name.toLowerCase().includes(search.toLowerCase()) || 
+      v.uniqueId.includes(search)
+    );
+  }, [veiculos, search]);
+
+  // Colunas da Tabela
+  const columns = [
+    { id: 'name', label: 'Veículo', render: (row) => (
+      <Box sx={{display:'flex', alignItems:'center', gap: 2}}>
+        <Avatar sx={{bgcolor:'primary.main', width:30, height:30}}><DirectionsCarIcon fontSize="small"/></Avatar>
+        <Box>
+          <Typography variant="body2" fontWeight="bold">{row.name}</Typography>
+          <Typography variant="caption" sx={{opacity:0.7}}>{row.attributes?.modelo}</Typography>
+        </Box>
+      </Box>
+    )},
+    { id: 'uniqueId', label: 'IMEI' },
+    { id: 'ownerId', label: 'Proprietário', render: (row) => userMap[row.attributes?.ownerId] || '-' },
+    { id: 'status', label: 'Status', render: (row) => (
+      <Chip label={row.status === 'online' ? 'Online' : 'Offline'} color={row.status === 'online' ? 'success' : 'error'} size="small" variant="outlined"/>
+    )}
+  ];
+
+  // Ações da Tabela com Proteção
+  const tableActions = (row) => (
+    <Box>
+      <PermissionGate permissions={PERMISSIONS.EDIT_VEHICLES}>
+        <Tooltip title="Editar">
+          <IconButton size="small" color="primary" onClick={(e) => { e.stopPropagation(); setEditingVehicle(row); }}>
+            <EditIcon fontSize="small"/>
+          </IconButton>
+        </Tooltip>
+      </PermissionGate>
+      
+      <PermissionGate permissions={PERMISSIONS.DELETE_VEHICLES}>
+        <Tooltip title="Excluir">
+          <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}>
+            <DeleteIcon fontSize="small"/>
+          </IconButton>
+        </Tooltip>
+      </PermissionGate>
+    </Box>
+  );
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Tem certeza que deseja excluir este veículo?')) {
+      deleteMutation.mutate(id);
     }
-  }, []);
+  };
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleSuccess = () => { setIsCreateModalOpen(false); setEditingVehicle(null); fetchData(); };
-
-  const cellStyle = { color: '#e0e0e0', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '8px 16px' };
-  const headerStyle = { fontWeight: 'bold', color: '#00e5ff', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.1)' };
+  if (isLoading) return <Box sx={{display:'flex', justifyContent:'center', p:5}}><CircularProgress /></Box>;
+  if (isError) return <Alert severity="error">Erro ao carregar veículos.</Alert>;
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>Frota Gerenciada</Typography>
-        <Button 
-          variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateModalOpen(true)}
-          sx={{ borderRadius: 1 }}
-        >
-          Novo Veículo
-        </Button>
+      {/* Header */}
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'text.primary' }}>Frota</Typography>
+          <Typography variant="body2" color="text.secondary">Gerencie todos os veículos ativos</Typography>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: { xs: '100%', md: 'auto' } }}>
+          <Search>
+            <SearchIconWrapper><SearchIcon /></SearchIconWrapper>
+            <StyledInputBase placeholder="Buscar placa ou IMEI..." onChange={(e) => setSearch(e.target.value)} value={search} />
+          </Search>
+
+          <ToggleButtonGroup 
+            value={viewMode} 
+            exclusive 
+            onChange={(e, next) => next && setViewMode(next)} 
+            size="small"
+            sx={{ borderColor: 'divider' }}
+          >
+            <ToggleButton value="grid" sx={{color:'text.primary'}}><ViewModuleIcon /></ToggleButton>
+            <ToggleButton value="list" sx={{color:'text.primary'}}><ViewListIcon /></ToggleButton>
+          </ToggleButtonGroup>
+
+          <PermissionGate permissions={PERMISSIONS.CREATE_VEHICLES}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateOpen(true)}>
+              Novo
+            </Button>
+          </PermissionGate>
+        </Box>
       </Box>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 1 }}>
-        {loading ? <Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress /></Box> : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={headerStyle}>VEÍCULO / PLACA</TableCell>
-                <TableCell sx={headerStyle}>IMEI</TableCell>
-                <TableCell sx={headerStyle}>PROPRIETÁRIO</TableCell>
-                <TableCell sx={headerStyle}>STATUS</TableCell>
-                <TableCell sx={headerStyle} align="right">AÇÕES</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {veiculos.map((veiculo) => {
-                // Tenta pegar ownerId do atributo salvo, ou infere (lógica simples para MVP)
-                // O ideal é salvar ownerId no momento da criação (veja CreateVeiculoModal)
-                const ownerName = usuarios[veiculo.attributes?.ownerId] || 'Não vinculado';
-                
-                return (
-                  <TableRow key={veiculo.id} hover sx={{ '&:hover': { background: 'rgba(255,255,255,0.03)' } }}>
-                    <TableCell sx={cellStyle}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Avatar sx={{ bgcolor: 'rgba(0,229,255,0.1)', color: '#00e5ff', width: 28, height: 28, borderRadius: 1 }}>
-                           <DirectionsCarIcon fontSize="small" />
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">{veiculo.name}</Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>{veiculo.attributes?.modelo}</Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={cellStyle}>{veiculo.uniqueId}</TableCell>
-                    <TableCell sx={cellStyle}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#7c4dff' }}>
-                         <PersonIcon fontSize="small" />
-                         <Typography variant="body2">{ownerName}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={cellStyle}>
-                      <Chip 
-                        label={veiculo.status === 'online' ? 'ONLINE' : 'OFFLINE'} 
-                        color={veiculo.status === 'online' ? 'success' : 'error'} 
-                        variant="outlined" size="small" sx={{borderRadius: 1, height: 20, fontSize: 10, fontWeight: 'bold'}}
-                      />
-                    </TableCell>
-                    <TableCell sx={cellStyle} align="right">
-                      <Tooltip title="Editar"><IconButton size="small" onClick={() => setEditingVehicle(veiculo)} sx={{ color: '#00e5ff' }}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                      <Tooltip title="Excluir"><IconButton size="small" sx={{ color: '#ff1744' }}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </TableContainer>
+      {/* Conteúdo */}
+      {viewMode === 'grid' ? (
+        <Grid container spacing={3}>
+          {filteredVehicles.map(vehicle => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={vehicle.id}>
+              <VehicleCard 
+                vehicle={vehicle} 
+                onEdit={setEditingVehicle} 
+                onDelete={handleDelete}
+                ownerName={userMap[vehicle.attributes?.ownerId]}
+              />
+            </Grid>
+          ))}
+          {filteredVehicles.length === 0 && (
+            <Grid item xs={12}><Typography align="center" sx={{color:'text.secondary', mt:4}}>Nenhum veículo encontrado.</Typography></Grid>
+          )}
+        </Grid>
+      ) : (
+        <RichTable 
+          data={filteredVehicles}
+          columns={columns}
+          actions={tableActions}
+          selectable
+        />
+      )}
 
-      <CreateVeiculoModal open={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={handleSuccess} />
-      {editingVehicle && <EditVehicleModal open={!!editingVehicle} vehicle={editingVehicle} onClose={() => setEditingVehicle(null)} onSuccess={handleSuccess} />}
+      {/* Modais */}
+      <CreateVeiculoModal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={() => setIsCreateOpen(false)} />
+      {editingVehicle && <EditVehicleModal open={!!editingVehicle} vehicle={editingVehicle} onClose={() => setEditingVehicle(null)} onSuccess={() => setEditingVehicle(null)} />}
     </Box>
   );
 };
+
 export default VeiculosPage;

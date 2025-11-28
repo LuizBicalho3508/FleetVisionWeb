@@ -1,66 +1,85 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Avatar, CircularProgress, Tooltip } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, Button, Grid, Paper, Tabs, Tab } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import BadgeIcon from '@mui/icons-material/Badge';
-import apiClient, { adminApiClient } from '../../api/apiClient';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import ListIcon from '@mui/icons-material/List';
+import DriverRankCard from '../../components/drivers/DriverRankCard';
 import CreateDriverModal from '../../components/filial/CreateDriverModal';
+import { useDriverRanking } from '../../hooks/useFleetData'; // Novo hook
+import { CircularProgress } from '@mui/material';
+
+// Tabela simples (para a aba de lista)
+import RichTable from '../../components/common/RichTable';
 
 const DriversPage = () => {
-  const [drivers, setDrivers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tabIndex, setTabIndex] = useState(0);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const { data: rankedDrivers = [], isLoading } = useDriverRanking();
 
-  const fetchDrivers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get('/drivers');
-      setDrivers(response.data);
-    } catch (error) { console.error(error); } 
-    finally { setLoading(false); }
-  }, []);
+  if (isLoading) return <Box sx={{display:'flex', justifyContent:'center', mt:10}}><CircularProgress/></Box>;
 
-  useEffect(() => { fetchDrivers(); }, [fetchDrivers]);
-
-  const handleDelete = async (id) => {
-    if(window.confirm("Excluir?")) {
-      await adminApiClient.delete(`/drivers/${id}`);
-      fetchDrivers();
-    }
-  };
-
-  const style = { color: '#e0e0e0', borderBottom: '1px solid rgba(255,255,255,0.1)' };
+  // Colunas para a tabela simples
+  const columns = [
+    { id: 'name', label: 'Nome' },
+    { id: 'uniqueId', label: 'Identificador' },
+    { id: 'score', label: 'Score', numeric: true },
+    { id: 'infractions', label: 'Infrações', numeric: true }
+  ];
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4" sx={{ color: '#fff', fontWeight: 'bold' }}>Motoristas</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateOpen(true)} sx={{ borderRadius: 1 }}>Novo</Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" sx={{ color: '#fff', fontWeight: 'bold' }}>Gestão de Motoristas</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateOpen(true)}>Novo Motorista</Button>
       </Box>
-      <TableContainer component={Paper} sx={{ background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 1 }}>
-        {loading ? <Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress /></Box> : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ ...style, color: '#00e5ff', fontWeight: 'bold' }}>Nome</TableCell>
-                <TableCell sx={{ ...style, color: '#00e5ff', fontWeight: 'bold' }}>ID</TableCell>
-                <TableCell sx={{ ...style, color: '#00e5ff', fontWeight: 'bold' }} align="right">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {drivers.map((d) => (
-                <TableRow key={d.id} hover sx={{ '&:hover': { background: 'rgba(255,255,255,0.05)' } }}>
-                  <TableCell sx={style}><Box sx={{display:'flex', alignItems:'center', gap:2}}><Avatar sx={{bgcolor:'rgba(0,229,255,0.1)', color:'#00e5ff'}}><BadgeIcon/></Avatar>{d.name}</Box></TableCell>
-                  <TableCell sx={style}>{d.uniqueId}</TableCell>
-                  <TableCell sx={style} align="right"><IconButton onClick={() => handleDelete(d.id)} sx={{color:'#ff1744'}}><DeleteIcon/></IconButton></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </TableContainer>
-      <CreateDriverModal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={() => { setIsCreateOpen(false); fetchDrivers(); }} />
+
+      <Paper sx={{ bgcolor: 'rgba(30,41,59,0.4)', mb: 3, borderRadius: 2 }}>
+        <Tabs value={tabIndex} onChange={(e, v) => setTabIndex(v)} textColor="primary" indicatorColor="primary">
+          <Tab icon={<EmojiEventsIcon />} label="Ranking de Performance" iconPosition="start" />
+          <Tab icon={<ListIcon />} label="Lista Cadastral" iconPosition="start" />
+        </Tabs>
+      </Paper>
+
+      {tabIndex === 0 && (
+        <Grid container spacing={3}>
+          {/* TOP 3 PODIUM (Visual) */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, textAlign: 'center', height: '100%', background: 'linear-gradient(180deg, rgba(30,41,59,0.8) 0%, rgba(15,23,42,0.9) 100%)', border: '1px solid rgba(255,215,0,0.3)' }}>
+              <Typography variant="h6" sx={{ color: '#ffd700', mb: 2 }}>🏆 Melhor Motorista</Typography>
+              {rankedDrivers[0] && (
+                <Box>
+                  <Avatar sx={{ width: 100, height: 100, margin: '0 auto', mb: 2, bgcolor: '#ffd700', color: '#000', fontSize: 40, border: '4px solid #fff' }}>
+                    {rankedDrivers[0].name.charAt(0)}
+                  </Avatar>
+                  <Typography variant="h5" fontWeight="bold">{rankedDrivers[0].name}</Typography>
+                  <Typography variant="body2" sx={{ color: '#aaa', mb: 2 }}>Score: {rankedDrivers[0].score}/100</Typography>
+                  <Chip label="Excelente" color="success" />
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+
+          {/* LISTA DE RANKING COMPLETA */}
+          <Grid item xs={12} md={8}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#fff' }}>Classificação Geral</Typography>
+            {rankedDrivers.map((driver, index) => (
+              <DriverRankCard key={driver.id} driver={driver} rank={index + 1} />
+            ))}
+          </Grid>
+        </Grid>
+      )}
+
+      {tabIndex === 1 && (
+        <RichTable 
+          title="Base de Motoristas"
+          data={rankedDrivers}
+          columns={columns}
+        />
+      )}
+
+      <CreateDriverModal open={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={() => window.location.reload()} />
     </Box>
   );
 };
+
 export default DriversPage;
