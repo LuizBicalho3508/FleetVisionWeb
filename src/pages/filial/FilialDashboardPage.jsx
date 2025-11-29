@@ -1,22 +1,21 @@
-// Local: src/pages/filial/FilialDashboardPage.jsx
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Grid, CircularProgress, Paper } from '@mui/material';
+import { Box, Typography, Grid, CircularProgress, Paper, useTheme } from '@mui/material';
 import StatCard from '../../components/dashboard/StatCard';
 import apiClient from '../../api/apiClient';
 import dayjs from 'dayjs';
+import { motion } from 'framer-motion';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 // Ícones
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import EventBusyIcon from '@mui/icons-material/EventBusy';
 
 const FilialDashboardPage = () => {
+  const theme = useTheme();
   const [stats, setStats] = useState({ clientes: 0, veiculos: 0, online: 0, offline: 0 });
-  const [contracts, setContracts] = useState({ active: 0, expired: 0 });
+  const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -27,9 +26,8 @@ const FilialDashboardPage = () => {
       ]);
 
       const veiculos = devicesRes.data;
-      const clientes = usersRes.data.filter(u => !u.userLimit && !u.administrator); // Clientes da filial
+      const clientes = usersRes.data.filter(u => !u.userLimit && !u.administrator);
 
-      // Operacional
       setStats({
         clientes: clientes.length,
         veiculos: veiculos.length,
@@ -37,19 +35,11 @@ const FilialDashboardPage = () => {
         offline: veiculos.filter(d => d.status === 'offline' || d.status === 'unknown').length,
       });
 
-      // Contratos dos Clientes
-      const now = dayjs();
-      let active = 0, expired = 0;
-      clientes.forEach(c => {
-        const end = c.attributes?.contractEnd ? dayjs(c.attributes.contractEnd) : null;
-        if (end) {
-          if (end.isBefore(now, 'day')) expired++;
-          else active++;
-        } else {
-            active++; // Sem data = Vigente por padrão
-        }
-      });
-      setContracts({ active, expired });
+      // Mock para gráfico (em produção, agrupe dados reais)
+      setChartData([
+        { name: 'On', value: veiculos.filter(d => d.status === 'online').length },
+        { name: 'Off', value: veiculos.filter(d => d.status !== 'online').length }
+      ]);
 
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -62,33 +52,52 @@ const FilialDashboardPage = () => {
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
 
+  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const itemVariants = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } };
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      
-      {/* SEÇÃO OPERACIONAL */}
-      <Box>
-        <Typography variant="h6" sx={{ color: '#fff', mb: 2, borderLeft: '4px solid #00e5ff', pl: 2, fontWeight:'bold' }}>
-          OPERAÇÃO DA FILIAL
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6} md={3}><StatCard title="Meus Clientes" value={stats.clientes} icon={<PeopleAltIcon />} color="#7c4dff" /></Grid>
-          <Grid item xs={12} sm={6} md={3}><StatCard title="Total Veículos" value={stats.veiculos} icon={<DirectionsCarIcon />} color="#00e5ff" /></Grid>
-          <Grid item xs={12} sm={6} md={3}><StatCard title="Online Agora" value={stats.online} icon={<CheckCircleIcon />} color="#00e676" /></Grid>
-          <Grid item xs={12} sm={6} md={3}><StatCard title="Offline" value={stats.offline} icon={<WarningIcon />} color="#ff1744" /></Grid>
-        </Grid>
+    <Box component={motion.div} variants={containerVariants} initial="hidden" animate="visible">
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight="bold">Visão Geral da Filial</Typography>
+        <Typography variant="body2" color="text.secondary">Acompanhamento em tempo real da operação</Typography>
       </Box>
 
-      {/* SEÇÃO CONTRATOS */}
-      <Box>
-        <Typography variant="h6" sx={{ color: '#fff', mb: 2, borderLeft: '4px solid #00e676', pl: 2, fontWeight:'bold' }}>
-          STATUS CONTRATUAL (CLIENTES)
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} sm={6} md={3}><StatCard title="Contratos Vigentes" value={contracts.active} icon={<AssignmentIcon />} color="#00e676" /></Grid>
-          <Grid item xs={12} sm={6} md={3}><StatCard title="Contratos Vencidos" value={contracts.expired} icon={<EventBusyIcon />} color="#ff1744" /></Grid>
-          {/* Espaço para mais KPIs futuros */}
+      {/* KPI Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3} component={motion.div} variants={itemVariants}>
+          <StatCard title="Meus Clientes" value={stats.clientes} icon={<PeopleAltIcon />} color={theme.palette.secondary.main} />
         </Grid>
-      </Box>
+        <Grid item xs={12} sm={6} md={3} component={motion.div} variants={itemVariants}>
+          <StatCard title="Total Veículos" value={stats.veiculos} icon={<DirectionsCarIcon />} color={theme.palette.primary.main} />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3} component={motion.div} variants={itemVariants}>
+          <StatCard title="Online Agora" value={stats.online} icon={<CheckCircleIcon />} color="#00e676" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3} component={motion.div} variants={itemVariants}>
+          <StatCard title="Offline" value={stats.offline} icon={<WarningIcon />} color="#ff1744" />
+        </Grid>
+      </Grid>
+
+      {/* Gráfico */}
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={8} component={motion.div} variants={itemVariants}>
+          <Paper sx={{ p: 3, height: 400, borderRadius: 3 }}>
+            <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>Conectividade da Frota</Typography>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} strokeOpacity={0.1} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" width={50} tick={{ fill: theme.palette.text.secondary }} />
+                <Tooltip 
+                  cursor={{fill: 'transparent'}} 
+                  contentStyle={{ backgroundColor: theme.palette.background.paper, borderRadius: 8, border: 'none' }} 
+                />
+                <Bar dataKey="value" fill={theme.palette.primary.main} radius={[0, 4, 4, 0]} barSize={30} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Paper>
+        </Grid>
+      </Grid>
     </Box>
   );
 };

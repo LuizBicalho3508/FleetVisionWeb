@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-rout
 import { 
   Box, AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItem, 
   ListItemButton, ListItemIcon, ListItemText, Avatar, Tooltip, Breadcrumbs, 
-  Link, Badge, Menu, MenuItem, Divider, useMediaQuery, useTheme
+  Link, Badge, Menu, MenuItem, Divider, useMediaQuery, useTheme, Container
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
@@ -29,8 +29,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
 
-const DRAWER_WIDTH = 260;
-const DRAWER_COLLAPSED_WIDTH = 72;
+const DRAWER_WIDTH = 280;
+const DRAWER_COLLAPSED_WIDTH = 80;
 
 const menuItems = [
   { label: 'Visão Geral', path: '/admin/dashboard', icon: <DashboardIcon />, permission: PERMISSIONS.VIEW_REPORTS },
@@ -40,7 +40,7 @@ const menuItems = [
   { label: 'Financeiro', path: '/admin/financeiro', icon: <AttachMoneyIcon />, permission: PERMISSIONS.VIEW_FINANCIAL },
   { label: 'Auditoria', path: '/admin/auditoria', icon: <HistoryIcon />, permission: PERMISSIONS.VIEW_AUDIT },
   { label: 'Personalização', path: '/admin/personalizacao', icon: <PaletteIcon />, permission: PERMISSIONS.MANAGE_BRANDING },
-  { label: 'Configurações', path: '/admin/configuracoes', icon: <SettingsIcon />, permission: null }, // Sempre visível
+  { label: 'Configurações', path: '/admin/configuracoes', icon: <SettingsIcon />, permission: null },
 ];
 
 const AdminLayout = () => {
@@ -55,7 +55,6 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ATIVA A TELEMETRIA EM TEMPO REAL PARA TODO O PAINEL ADMIN
   useLiveFleet();
 
   const handleDrawerToggle = () => {
@@ -63,15 +62,17 @@ const AdminLayout = () => {
     else setCollapsed(!collapsed);
   };
 
+  // Breadcrumbs Dinâmicos
   const pathnames = location.pathname.split('/').filter((x) => x);
 
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header da Sidebar */}
       <Box sx={{ 
-        p: 2, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
-        borderBottom: `1px solid ${theme.palette.divider}`, minHeight: 64
+        p: 3, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
+        minHeight: 70
       }}>
-        {!collapsed && !isMobile ? (
+        {!collapsed ? (
            <Typography variant="h6" sx={{ 
              background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, letterSpacing: 1
@@ -79,28 +80,33 @@ const AdminLayout = () => {
              FLEET VISION
            </Typography>
         ) : (
-           <Box sx={{ width: 32, height: 32, borderRadius: 1, bgcolor: 'primary.main' }} /> 
+           <Box sx={{ width: 32, height: 32, borderRadius: 1, bgcolor: 'primary.main', boxShadow: '0 0 10px rgba(0,229,255,0.5)' }} /> 
         )}
       </Box>
 
-      <List sx={{ flexGrow: 1, px: 1, py: 2 }}>
+      {/* Lista de Menu */}
+      <List sx={{ flexGrow: 1, px: 2, py: 2 }}>
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
           
           const MenuItemContent = (
             <Tooltip title={collapsed ? item.label : ''} placement="right" arrow>
-              <ListItem disablePadding sx={{ display: 'block', mb: 0.5 }}>
+              <ListItem disablePadding sx={{ display: 'block', mb: 1 }}>
                 <ListItemButton
                   onClick={() => { navigate(item.path); if(isMobile) setMobileOpen(false); }}
                   selected={isActive}
                   sx={{
                     minHeight: 48,
                     justifyContent: collapsed ? 'center' : 'initial',
-                    borderRadius: 2,
+                    borderRadius: 3,
                     px: 2.5,
+                    transition: 'all 0.2s',
                     bgcolor: isActive ? alpha(theme.palette.primary.main, 0.15) : 'transparent',
                     color: isActive ? 'primary.main' : 'text.secondary',
-                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                    '&:hover': { 
+                      bgcolor: alpha(theme.palette.primary.main, 0.08),
+                      transform: 'translateX(4px)'
+                    },
                     '&.Mui-selected': { bgcolor: alpha(theme.palette.primary.main, 0.15) }
                   }}
                 >
@@ -110,13 +116,16 @@ const AdminLayout = () => {
                   }}>
                     {item.icon}
                   </ListItemIcon>
-                  <ListItemText primary={item.label} sx={{ opacity: collapsed ? 0 : 1, display: collapsed ? 'none' : 'block' }} />
+                  <ListItemText 
+                    primary={item.label} 
+                    sx={{ opacity: collapsed ? 0 : 1, display: collapsed ? 'none' : 'block' }} 
+                    primaryTypographyProps={{ fontWeight: isActive ? 600 : 400 }}
+                  />
                 </ListItemButton>
               </ListItem>
             </Tooltip>
           );
 
-          // Se tiver permissão definida, usa o Gate. Se for null, renderiza sempre.
           if (item.permission) {
             return (
               <PermissionGate key={item.path} permissions={item.permission}>
@@ -128,11 +137,12 @@ const AdminLayout = () => {
         })}
       </List>
       
-      <Divider sx={{ my: 1 }} />
+      <Divider sx={{ my: 1, borderColor: 'rgba(255,255,255,0.05)' }} />
       
-      <Box sx={{ p: collapsed ? 1 : 2, textAlign: collapsed ? 'center' : 'left' }}>
-         <IconButton onClick={toggleTheme} color="inherit">
-            {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+      {/* Footer da Sidebar */}
+      <Box sx={{ p: 2, display: 'flex', flexDirection: collapsed ? 'column' : 'row', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
+         <IconButton onClick={toggleTheme} color="inherit" sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
+            {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
          </IconButton>
       </Box>
     </Box>
@@ -140,12 +150,17 @@ const AdminLayout = () => {
 
   return (
     <Box sx={{ display: 'flex' }}>
+      {/* Topbar */}
       <AppBar position="fixed" sx={{ 
         zIndex: (theme) => theme.zIndex.drawer + 1,
         width: { md: `calc(100% - ${collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH}px)` },
         ml: { md: `${collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH}px` },
-        bgcolor: 'background.paper', color: 'text.primary',
-        borderBottom: `1px solid ${theme.palette.divider}`, boxShadow: 'none', transition: 'width 0.2s'
+        bgcolor: alpha(theme.palette.background.default, 0.8), 
+        backdropFilter: 'blur(12px)',
+        color: 'text.primary',
+        borderBottom: `1px solid ${theme.palette.divider}`, 
+        boxShadow: 'none', 
+        transition: 'width 0.3s ease'
       }}>
         <Toolbar>
           <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2 }}>
@@ -157,26 +172,24 @@ const AdminLayout = () => {
             {pathnames.slice(1).map((value, index) => {
               const last = index === pathnames.length - 2;
               const to = `/${pathnames.slice(0, index + 2).join('/')}`;
-              return last ? (
-                <Typography color="text.primary" key={to} sx={{ textTransform: 'capitalize' }}>{value}</Typography>
-              ) : (
-                <Link component={RouterLink} underline="hover" color="inherit" to={to} key={to} sx={{ textTransform: 'capitalize' }}>
+              return (
+                <Typography key={to} color={last ? "text.primary" : "inherit"} sx={{ textTransform: 'capitalize', fontWeight: last ? 'bold' : 'normal' }}>
                   {value}
-                </Link>
+                </Typography>
               );
             })}
           </Breadcrumbs>
 
           <Box sx={{ flexGrow: 1 }} />
 
-          <IconButton size="large" color="inherit">
-            <Badge badgeContent={4} color="error"><NotificationsIcon /></Badge>
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <IconButton size="large" color="inherit">
+              <Badge badgeContent={4} color="error"><NotificationsIcon /></Badge>
+            </IconButton>
 
-          <Box sx={{ ml: 2 }}>
             <Tooltip title="Configurações da Conta">
-              <IconButton onClick={(e) => setAnchorElUser(e.currentTarget)} sx={{ p: 0 }}>
-                <Avatar sx={{ bgcolor: 'secondary.main' }}>{user?.name?.charAt(0)}</Avatar>
+              <IconButton onClick={(e) => setAnchorElUser(e.currentTarget)} sx={{ p: 0, border: `2px solid ${theme.palette.primary.main}` }}>
+                <Avatar sx={{ bgcolor: 'secondary.main' }} src={user?.attributes?.avatar}>{user?.name?.charAt(0)}</Avatar>
               </IconButton>
             </Tooltip>
             <Menu
@@ -187,8 +200,15 @@ const AdminLayout = () => {
               anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-              <MenuItem disabled><Typography textAlign="center">{user?.email}</Typography></MenuItem>
+              <Box sx={{ px: 2, py: 1 }}>
+                <Typography variant="subtitle2" noWrap>{user?.name}</Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>{user?.email}</Typography>
+              </Box>
               <Divider />
+              <MenuItem onClick={() => navigate('/admin/configuracoes')}>
+                <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>Minha Conta</ListItemText>
+              </MenuItem>
               <MenuItem onClick={logout} sx={{ color: 'error.main' }}>
                 <ListItemIcon><LogoutIcon fontSize="small" color="error" /></ListItemIcon>
                 <ListItemText>Sair</ListItemText>
@@ -198,7 +218,8 @@ const AdminLayout = () => {
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ width: { md: collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
+      {/* Sidebar Navigation */}
+      <Box component="nav" sx={{ width: { md: collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH }, flexShrink: { md: 0 }, transition: 'width 0.3s ease' }}>
         <Drawer
           variant="temporary" open={mobileOpen} onClose={handleDrawerToggle}
           ModalProps={{ keepMounted: true }}
@@ -213,7 +234,7 @@ const AdminLayout = () => {
             '& .MuiDrawer-paper': { 
               boxSizing: 'border-box', 
               width: collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH,
-              transition: 'width 0.2s',
+              transition: 'width 0.3s ease',
               overflowX: 'hidden',
               borderRight: `1px solid ${theme.palette.divider}`,
               bgcolor: 'background.default'
@@ -225,12 +246,17 @@ const AdminLayout = () => {
         </Drawer>
       </Box>
 
+      {/* Main Content Area */}
       <Box component="main" sx={{ 
-        flexGrow: 1, p: 3, mt: 8, 
+        flexGrow: 1, p: { xs: 2, md: 4 }, mt: 8, 
         width: { md: `calc(100% - ${collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH}px)` },
-        transition: 'width 0.2s'
+        transition: 'width 0.3s ease',
+        minHeight: '100vh'
       }}>
-        <Outlet />
+        {/* Container para limitar a largura em telas muito grandes (UX de Leitura) */}
+        <Container maxWidth="xl" disableGutters>
+           <Outlet />
+        </Container>
       </Box>
     </Box>
   );

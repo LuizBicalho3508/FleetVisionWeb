@@ -1,136 +1,243 @@
-// Local: src/layouts/ClientLayout.jsx
-
-import React, { useState, useEffect, useCallback } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { 
-  Box, Toolbar, AppBar, Typography, Button, Drawer, List, 
-  ListItem, ListItemButton, ListItemIcon, ListItemText, 
-  IconButton, Avatar, Divider, CircularProgress 
+  Box, AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItem, 
+  ListItemButton, ListItemIcon, ListItemText, Avatar, Tooltip, Breadcrumbs, 
+  Link, Menu, MenuItem, Divider, useMediaQuery, useTheme, Container
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { useAuth } from '../context/AuthContext';
-import apiClient from '../api/apiClient';
-import dayjs from 'dayjs';
+import { useAppTheme } from '../context/ThemeContext';
+import { useLiveFleet } from '../hooks/useLiveFleet';
+import NotificationCenter from '../components/notifications/NotificationCenter';
 
 // Ícones
+import MenuIcon from '@mui/icons-material/Menu';
+import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import MapIcon from '@mui/icons-material/Map';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import FenceIcon from '@mui/icons-material/Fence';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LogoutIcon from '@mui/icons-material/Logout';
-import PersonIcon from '@mui/icons-material/Person';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 
-const drawerWidth = 260;
+const DRAWER_WIDTH = 280;
+const DRAWER_COLLAPSED_WIDTH = 80;
+
+const menuItems = [
+  { label: 'Visão Geral', path: '/dashboard/overview', icon: <DashboardIcon /> },
+  { label: 'Mapa', path: '/dashboard/map', icon: <MapIcon /> },
+  { label: 'Relatórios', path: '/dashboard/reports', icon: <AssessmentIcon /> },
+  { label: 'Meus Veículos', path: '/dashboard/vehicles', icon: <DirectionsCarIcon /> },
+  { label: 'Cercas Virtuais', path: '/dashboard/geofences', icon: <FenceIcon /> },
+  { label: 'Meus Alertas', path: '/dashboard/notifications', icon: <NotificationsIcon /> },
+  { label: 'Configurações', path: '/dashboard/configuracoes', icon: <SettingsIcon /> },
+];
 
 const ClientLayout = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [anchorElUser, setAnchorElUser] = useState(null);
+  
   const { user, logout } = useAuth();
+  const { toggleTheme, mode } = useAppTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Mantemos a lógica de carregar dados globais para o contexto
-  const [liveDevices, setLiveDevices] = useState([]);
-  const [summaryData, setSummaryData] = useState({});
-  const [loading, setLoading] = useState(true);
 
-  const fetchSharedData = useCallback(async () => {
-    try {
-      const [devicesRes, positionsRes] = await Promise.all([
-        apiClient.get('/devices'),
-        apiClient.get('/positions')
-      ]);
+  // Telemetria
+  useLiveFleet();
+
+  const handleDrawerToggle = () => {
+    if (isMobile) setMobileOpen(!mobileOpen);
+    else setCollapsed(!collapsed);
+  };
+
+  const pathnames = location.pathname.split('/').filter((x) => x);
+
+  const drawerContent = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header da Sidebar */}
+      <Box sx={{ 
+        p: 3, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
+        minHeight: 70
+      }}>
+        {!collapsed ? (
+           <Typography variant="h6" sx={{ 
+             background: `linear-gradient(90deg, #00e676, #00b0ff)`,
+             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 900, letterSpacing: 1
+           }}>
+             CLIENTE
+           </Typography>
+        ) : (
+           <Box sx={{ width: 32, height: 32, borderRadius: 1, bgcolor: '#00e676', boxShadow: '0 0 10px rgba(0,230,118,0.5)' }} /> 
+        )}
+      </Box>
+
+      {/* Lista de Menu */}
+      <List sx={{ flexGrow: 1, px: 2, py: 2 }}>
+        {menuItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          
+          return (
+            <Tooltip key={item.path} title={collapsed ? item.label : ''} placement="right" arrow>
+              <ListItem disablePadding sx={{ display: 'block', mb: 1 }}>
+                <ListItemButton
+                  onClick={() => { navigate(item.path); if(isMobile) setMobileOpen(false); }}
+                  selected={isActive}
+                  sx={{
+                    minHeight: 48,
+                    justifyContent: collapsed ? 'center' : 'initial',
+                    borderRadius: 3,
+                    px: 2.5,
+                    transition: 'all 0.2s',
+                    bgcolor: isActive ? alpha('#00e676', 0.15) : 'transparent',
+                    color: isActive ? '#00e676' : 'text.secondary',
+                    '&:hover': { 
+                      bgcolor: alpha('#00e676', 0.08),
+                      transform: 'translateX(4px)'
+                    },
+                    '&.Mui-selected': { bgcolor: alpha('#00e676', 0.15) }
+                  }}
+                >
+                  <ListItemIcon sx={{ 
+                    minWidth: 0, mr: collapsed ? 0 : 2, justifyContent: 'center',
+                    color: isActive ? '#00e676' : 'inherit'
+                  }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={item.label} 
+                    sx={{ opacity: collapsed ? 0 : 1, display: collapsed ? 'none' : 'block' }} 
+                    primaryTypographyProps={{ fontWeight: isActive ? 600 : 400 }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            </Tooltip>
+          );
+        })}
+      </List>
       
-      const positionsMap = new Map(positionsRes.data.map(pos => [pos.deviceId, pos]));
-      const combined = devicesRes.data.map(d => {
-        const pos = positionsMap.get(d.id);
-        return pos ? { ...d, ...pos } : { ...d, status: d.status || 'offline' };
-      });
-      setLiveDevices(combined);
-
-      if (devicesRes.data.length > 0) {
-        const summaryRes = await apiClient.get('/reports/summary', {
-          params: { deviceId: devicesRes.data.map(d=>d.id), from: dayjs().startOf('day').toISOString(), to: dayjs().endOf('day').toISOString() }
-        });
-        const total = summaryRes.data.reduce((acc, r) => ({ dist: acc.dist + r.distance, eng: acc.eng + r.engineHours }), { dist: 0, eng: 0 });
-        setSummaryData({ distance: total.dist, engineHours: total.eng });
-      }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => {
-    fetchSharedData();
-    const i = setInterval(fetchSharedData, 15000);
-    return () => clearInterval(i);
-  }, [fetchSharedData]);
-
-  const menuItems = [
-    { label: 'Visão Geral', path: '/dashboard/overview', icon: <DashboardIcon /> },
-    { label: 'Mapa Tempo Real', path: '/dashboard/map', icon: <MapIcon /> },
-    { label: 'Relatórios', path: '/dashboard/reports', icon: <AssessmentIcon /> },
-    { type: 'divider' },
-    { label: 'Meus Veículos', path: '/dashboard/vehicles', icon: <DirectionsCarIcon /> },
-    { label: 'Cercas Virtuais', path: '/dashboard/geofences', icon: <FenceIcon /> },
-    { label: 'Meus Alertas', path: '/dashboard/notifications', icon: <NotificationsIcon /> },
-  ];
-
-  if (loading) return <Box sx={{display:'flex', justifyContent:'center', height:'100vh', alignItems:'center'}}><CircularProgress/></Box>;
+      <Divider sx={{ my: 1, borderColor: 'rgba(255,255,255,0.05)' }} />
+      
+      {/* Footer da Sidebar */}
+      <Box sx={{ p: 2, display: 'flex', flexDirection: collapsed ? 'column' : 'row', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
+         <IconButton onClick={toggleTheme} color="inherit" sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
+            {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+         </IconButton>
+      </Box>
+    </Box>
+  );
 
   return (
     <Box sx={{ display: 'flex' }}>
       <AppBar position="fixed" sx={{ 
-        zIndex: (theme) => theme.zIndex.drawer + 1, 
-        backdropFilter: 'blur(12px)', backgroundColor: 'rgba(15, 20, 35, 0.95) !important',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        width: { md: `calc(100% - ${collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH}px)` },
+        ml: { md: `${collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH}px` },
+        bgcolor: alpha(theme.palette.background.default, 0.8), 
+        backdropFilter: 'blur(12px)',
+        color: 'text.primary',
+        borderBottom: `1px solid ${theme.palette.divider}`, 
+        boxShadow: 'none', 
+        transition: 'width 0.3s ease'
       }}>
         <Toolbar>
-          <Typography variant="h6" noWrap component="div" sx={{ 
-            fontWeight: '900', color:'#fff', letterSpacing: 1, minWidth: drawerWidth - 40
-          }}>
-            VISION FLEET
-          </Typography>
+          <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2 }}>
+            {isMobile ? <MenuIcon /> : (collapsed ? <MenuIcon /> : <MenuOpenIcon />)}
+          </IconButton>
+
+          <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} aria-label="breadcrumb" sx={{ display: { xs: 'none', sm: 'block' } }}>
+            <Link component={RouterLink} underline="hover" color="inherit" to="/dashboard/overview">Dashboard</Link>
+            {pathnames.slice(1).map((value, index) => {
+              const last = index === pathnames.length - 2;
+              const to = `/${pathnames.slice(0, index + 2).join('/')}`;
+              return (
+                <Typography key={to} color={last ? "text.primary" : "inherit"} sx={{ textTransform: 'capitalize', fontWeight: last ? 'bold' : 'normal' }}>
+                  {value}
+                </Typography>
+              );
+            })}
+          </Breadcrumbs>
+
           <Box sx={{ flexGrow: 1 }} />
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-             <Typography variant="body2" sx={{color:'rgba(255,255,255,0.7)', display:{xs:'none',md:'block'}}}>{user?.email}</Typography>
-             <Avatar sx={{ width: 32, height: 32, bgcolor: '#7c4dff' }}><PersonIcon /></Avatar>
-             <Button color="error" startIcon={<LogoutIcon />} onClick={logout} size="small">Sair</Button>
+            <NotificationCenter />
+
+            <Tooltip title="Minha Conta">
+              <IconButton onClick={(e) => setAnchorElUser(e.currentTarget)} sx={{ p: 0, border: `2px solid #00e676` }}>
+                <Avatar sx={{ bgcolor: '#00e676', color: '#000' }}>{user?.name?.charAt(0)}</Avatar>
+              </IconButton>
+            </Tooltip>
+            <Menu
+              sx={{ mt: '45px' }}
+              anchorEl={anchorElUser}
+              open={Boolean(anchorElUser)}
+              onClose={() => setAnchorElUser(null)}
+              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <Box sx={{ px: 2, py: 1 }}>
+                <Typography variant="subtitle2" noWrap>{user?.name}</Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>{user?.email}</Typography>
+              </Box>
+              <Divider />
+              <MenuItem onClick={() => navigate('/dashboard/configuracoes')}>
+                <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>Minha Conta</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={logout} sx={{ color: 'error.main' }}>
+                <ListItemIcon><LogoutIcon fontSize="small" color="error" /></ListItemIcon>
+                <ListItemText>Sair</ListItemText>
+              </MenuItem>
+            </Menu>
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Drawer variant="permanent" sx={{
-        width: drawerWidth, flexShrink: 0,
-        [`& .MuiDrawer-paper`]: { 
-          width: drawerWidth, boxSizing: 'border-box',
-          backgroundColor: 'rgba(20, 27, 45, 0.6)', borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-          backdropFilter: 'blur(16px)', top: '64px', height: 'calc(100% - 64px)'
-        },
-      }}>
-        <Box sx={{ overflow: 'auto', mt: 3, px: 2 }}>
-          <List>
-            {menuItems.map((item, index) => {
-              if (item.type === 'divider') return <Divider key={index} sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />;
-              const isActive = location.pathname === item.path;
-              return (
-                <ListItem key={item.label} disablePadding sx={{ mb: 1 }}>
-                  <ListItemButton onClick={() => navigate(item.path)} selected={isActive} sx={{
-                    borderRadius: 1,
-                    color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
-                    backgroundColor: isActive ? 'rgba(124, 77, 255, 0.15) !important' : 'transparent', // Roxo para cliente
-                    borderLeft: isActive ? '4px solid #7c4dff' : '4px solid transparent',
-                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff' }
-                  }}>
-                    <ListItemIcon sx={{ color: isActive ? '#7c4dff' : 'rgba(255,255,255,0.4)', minWidth: 40 }}>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.9rem', fontWeight: isActive ? 'bold' : 'medium' }} />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
-        </Box>
-      </Drawer>
+      <Box component="nav" sx={{ width: { md: collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH }, flexShrink: { md: 0 }, transition: 'width 0.3s ease' }}>
+        <Drawer
+          variant="temporary" open={mobileOpen} onClose={handleDrawerToggle}
+          ModalProps={{ keepMounted: true }}
+          sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH } }}
+        >
+          {drawerContent}
+        </Drawer>
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH,
+              transition: 'width 0.3s ease',
+              overflowX: 'hidden',
+              borderRight: `1px solid ${theme.palette.divider}`,
+              bgcolor: 'background.default'
+            },
+          }}
+          open
+        >
+          {drawerContent}
+        </Drawer>
+      </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8, overflow: 'hidden' }}>
-        <Outlet context={{ liveDevices, summaryData, fetchSharedData }} />
+      <Box component="main" sx={{ 
+        flexGrow: 1, p: { xs: 2, md: 4 }, mt: 8, 
+        width: { md: `calc(100% - ${collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH}px)` },
+        transition: 'width 0.3s ease',
+        minHeight: '100vh'
+      }}>
+        <Container maxWidth="xl" disableGutters>
+           <Outlet />
+        </Container>
       </Box>
     </Box>
   );
